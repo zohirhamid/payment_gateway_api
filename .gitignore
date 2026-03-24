@@ -1,11 +1,5 @@
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
+.venv/
 .env
-venv/
-.env.*
-*.sqlite3
-.DS_Store
-.idea/
-.vscode/
+payment_gateway.db
