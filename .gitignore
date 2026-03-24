@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-.venv/
 .env
-payment_gateway.db
+.venv/
 venv/
+payment_gateway.db
