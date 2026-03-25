@@ -11,5 +11,3 @@ class Merchant(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-    

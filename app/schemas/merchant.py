@@ -5,7 +5,7 @@ class MerchantResponse(BaseModel):
     name: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class MerchantCreateResponse(BaseModel):
@@ -14,4 +14,4 @@ class MerchantCreateResponse(BaseModel):
     api_key: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True

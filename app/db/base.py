@@ -6,4 +6,4 @@ Base = declarative_base()
 # Import model modules (not symbols) so SQLAlchemy registers tables on Base.metadata,
 # while avoiding circular imports (models import Base).
 import app.db.models.merchant  # noqa: F401
-
+import app.db.models.payment_intent # noqa
