@@ -7,3 +7,5 @@ Base = declarative_base()
 # while avoiding circular imports (models import Base).
 import app.db.models.merchant  # noqa: F401
 import app.db.models.payment_intent # noqa
+import app.db.models.charge #noqa
+import app.db.models.idempotency_record #noqa

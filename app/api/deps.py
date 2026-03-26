@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -35,3 +35,13 @@ def get_current_merchant(db: Session = Depends(get_db), credentials: HTTPAuthori
     
     return merchant 
 
+
+
+def get_idempotency_key(idempotency_key: str | None = Header(default=None)) -> str | None:
+    '''
+    Read the Idempotency-Key header from the request.
+
+    We keep this as a dependency so write endpoints can opt into idempotency support
+    without manually parsing headers.
+    '''
+    return idempotency_key

@@ -14,55 +14,55 @@ from app.utils.hashing import hash_api_key
 
 router = APIRouter()
 
+
 @router.get("/health")
 def health_check():
-    return {
-        "status": "ok"
-        }
-'''
-@router.post("/test-merchants", response_model=MerchantCreateResponse)
-def create_test_merchant(db: Session = Depends(get_db)):
-    raw_api_key = generate_api_key()
-    hashed_api_key = hash_api_key(raw_api_key)
+    """Health check endpoint.
 
-    merchant = Merchant(
-        name="Test Merchant",
-        api_key_hash=hashed_api_key,
-        webhook_url="https://example.com/webhook",
-        )
+    Why this exists:
+        Provides a lightweight way for deploy/runtime tooling to verify the API
+        process is up and responding.
 
-    db.add(merchant)
-    db.commit()
-    db.refresh(merchant)
+    Returns:
+        A small JSON payload indicating status.
+    """
 
-    return {
-        "id": merchant.id,
-        "name": merchant.name,
-        "api_key": raw_api_key,
-    }
-    '''
-
+    return {"status": "ok"}
 
 # List[MerchantResponse]: this endpoint returns a list where each item should match MerchantResponse
 @router.get("/merchants", response_model=List[MerchantResponse])
 def list_test_merchants(db: Session = Depends(get_db)):
-    merchants = db.query(Merchant).all()
+    """List merchants (debug-only).
 
+    Why this exists:
+        Useful during local development to quickly inspect what test merchants
+        exist in the database.
+
+    Takes:
+        db: SQLAlchemy session injected by `Depends(get_db)`.
+
+    Returns:
+        A list of merchants serialized as `MerchantResponse`.
+    """
+
+    merchants = db.query(Merchant).all()
     return merchants
+
 
 @router.get("/debug-token")
 def debug_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    '''
-    Depends(bearer_scheme): read the authorization header using the HTTP Bearer parser.
-    if u send "Authorization: Bearer pg_live_abc123" FastAPI turns that into a credentials object.
-    '''
+    """Echo the bearer token parsed from the `Authorization` header.
+
+    What it does:
+        Uses FastAPI's HTTP Bearer dependency to parse `Authorization: Bearer <token>`
+        into a credentials object, then extracts the raw token string.
+
+    Takes:
+        credentials: Parsed HTTP Bearer auth credentials.
+
+    Returns:
+        JSON payload containing the extracted `token` string.
+    """
+
     token = get_bearer_token(credentials)
     return {"token": token}
-
-
-'''
-# depends: "before running this endpoint, execute this function and give me its result"
-@router.get("/me", response_model=MerchantResponse)
-def read_me(current_merchant: Merchant = Depends(get_current_merchant)):
-    return current_merchant
-'''
