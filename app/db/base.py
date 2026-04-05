@@ -9,3 +9,4 @@ import app.db.models.merchant  # noqa: F401
 import app.db.models.payment_intent # noqa
 import app.db.models.charge #noqa
 import app.db.models.idempotency_record #noqa
+import app.db.models.webhook_event #noqa

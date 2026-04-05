@@ -21,5 +21,5 @@ def hash_request_payload(payload: dict) -> str:
 
     side note: Payload = the meaningful data sent in the body of a request.
     '''
-    normalized_payload = json.dumps(payload, sort_keys=True)
+    normalized_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(normalized_payload.encode()).hexdigest()

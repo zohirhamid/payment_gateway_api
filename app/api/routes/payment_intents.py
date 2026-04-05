@@ -3,7 +3,6 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
-from starlette.exceptions import HTTPException
 
 from app.api.deps import get_current_merchant, get_db, get_idempotency_key
 from app.utils.hashing import hash_request_payload
@@ -14,7 +13,9 @@ from app.schemas.payment_intent import PaymentIntentCreate, PaymentIntentRespons
 
 from app.db.models.charge import Charge
 from app.schemas.payment_intent import PaymentIntentConfirmResponse
-from app.services.payment_service import simulate_payment_result
+
+from app.services.payment_service import build_webhook_payload, simulate_payment_result
+from app.services.webhook_service import create_webhook_event, deliver_webhook_event
 
 from app.services.idempotency_service import (
     create_idempotency_record,
@@ -39,6 +40,7 @@ def create_payment_intent(
     exists with the same payload, the original response is replayed.
     """
 
+    # idempotency
     request_hash = hash_request_payload(payload.model_dump())
 
     if idempotency_key:
@@ -154,19 +156,50 @@ def confirm_payment_intent(
     payment_intent_id: int,
     db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant),
+    idempotency_key: str | None = Depends(get_idempotency_key),
 ):
     """
-    Confirm a payment intent and simulate a payment attempt.
+    Confirm a PaymentIntent for the authenticated merchant.
 
-    Flow:
-    - Ensure the payment intent exists and belongs to the merchant
-    - Ensure it is in a confirmable state
-    - Create a charge
-    - Simulate payment success/failure
-    - Update both charge and payment intent
+    This endpoint optionally replays a previously stored response when the same
+    idempotency key is reused with the same request payload. Otherwise, it:
+
+    - validates that the PaymentIntent exists and belongs to the current merchant
+    - checks that the PaymentIntent is still in a confirmable state
+    - creates a pending Charge for the payment attempt
+    - simulates the payment outcome
+    - updates the Charge and PaymentIntent to their final statuses
+    - creates a webhook event for the payment result
+
+    A PaymentIntent can only be confirmed once for now. After confirmation,
+    it moves to a terminal state such as `succeeded` or `failed`.
     """
 
-    payment_intent = (
+    # Created a hashed payload
+    confirm_payload = { # the id of a specific payment intent
+        "payment_intent_id": payment_intent_id
+        }
+    request_hash = hash_request_payload(confirm_payload)
+
+    # 
+    if idempotency_key:
+        existing_record = get_idempotency_record(
+            db=db,
+            merchant_id=current_merchant.id,
+            endpoint="confirm_payment_intent",
+            idempotency_key=idempotency_key,
+        )
+
+        if existing_record:
+            if existing_record.request_hash != request_hash:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Idempotency key was already used with a different payload.",
+                )
+
+            return PaymentIntentConfirmResponse(**json.loads(existing_record.response_body))
+
+    payment_intent = ( # get the current payment intent and check if it belongs to the current merchant
         db.query(PaymentIntent)
         .filter(
             PaymentIntent.id == payment_intent_id,
@@ -190,18 +223,16 @@ def confirm_payment_intent(
             status_code=409,
             detail="Payment intent cannot be confirmed in its current state.",
         )
-    
 
-
-    # Step 1: create charge
-    charge = Charge(
+    # Step 1: Create charge
+    charge = Charge( # Create a charge for the current paymentIntent
         payment_intent_id=payment_intent.id,
         amount=payment_intent.amount,
         status="pending",
     )
     db.add(charge)
 
-    # Step 2: simulate result
+    # Step 2: simulates the payment outcome
     result = simulate_payment_result()
 
     if result == "succeeded":
@@ -212,13 +243,58 @@ def confirm_payment_intent(
         charge.failure_reason = "Payment was declined"
         payment_intent.status = "failed"
 
+    # Save charge to database
     db.commit()
     db.refresh(charge)
     db.refresh(payment_intent)
 
-    return {
+
+    # creates a webhook event for the payment result
+    event_type = (
+        "payment.succeeded"
+        if payment_intent.status == "succeeded"
+        else "payment.failed"
+    )
+
+    webhook_payload = build_webhook_payload(payment_intent=payment_intent, event_id=0)
+
+    webhook_event = create_webhook_event(
+        db=db,
+        merchant_id=current_merchant.id,
+        payment_intent_id=payment_intent.id,
+        event_type=event_type,
+        payload=webhook_payload,
+    )
+
+    # Rebuild the payload with the real event id after persistence.
+    webhook_event.payload = json.dumps(
+        build_webhook_payload(payment_intent=payment_intent, event_id=webhook_event.id)
+    )
+    db.commit()
+    db.refresh(webhook_event)
+
+    if current_merchant.webhook_url:
+        deliver_webhook_event(
+            db=db,
+            webhook_event=webhook_event,
+            webhook_url=current_merchant.webhook_url
+        )
+
+    response_payload = {
         "payment_intent_id": payment_intent.id,
         "charge_id": charge.id,
         "status": payment_intent.status,
     }
 
+    if idempotency_key:
+        create_idempotency_record(
+            db=db,
+            merchant_id=current_merchant.id,
+            endpoint="confirm_payment_intent",
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            response_status_code=200,
+            response_body=json.dumps(response_payload),
+        )
+
+    return response_payload

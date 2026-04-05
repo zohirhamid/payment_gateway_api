@@ -18,7 +18,7 @@ def create_merchant(db: Session = Depends(get_db)):
     merchant = Merchant(
         name="Test Merchant",
         api_key_hash=hashed_api_key,
-        webhook_url="https://example.com/webhook",
+        webhook_url="http://127.0.0.1:8000/webhooks/test-receiver",
     )
     db.add(merchant)
     db.commit()
