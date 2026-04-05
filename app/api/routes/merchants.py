@@ -28,6 +28,7 @@ def create_merchant(db: Session = Depends(get_db)):
         "id": merchant.id,
         "name": merchant.name,
         "api_key": raw_api_key,
+        "created_at": merchant.created_at,
     }
 
 # depends: "before running this endpoint, execute this function and give me its result"

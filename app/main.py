@@ -19,6 +19,13 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
 
+
+app = FastAPI(
+    title=settings.app_name,
+    description=settings.app_description,
+    version=settings.app_version,
+)
+
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
@@ -38,7 +45,9 @@ app.openapi_components = {  # type: ignore
 }
 
 # Create all tables for all registered models if they do not already exist.
-Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+def create_tables():
+    Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_debug_router)
 app.include_router(merchants_router)

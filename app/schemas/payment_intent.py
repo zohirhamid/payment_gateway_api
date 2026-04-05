@@ -1,5 +1,6 @@
 """Pydantic schemas used by the PaymentIntent API endpoints."""
 
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -14,9 +15,12 @@ class PaymentIntentResponse(BaseModel):
     amount: int
     currency: str
     status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class PaymentIntentConfirmResponse(BaseModel):
     payment_intent_id: int
     charge_id: int
     status: str
-

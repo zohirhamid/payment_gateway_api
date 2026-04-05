@@ -78,6 +78,7 @@ def create_payment_intent(
         "amount": payment_intent.amount,
         "currency": payment_intent.currency,
         "status": payment_intent.status,
+        "created_at": payment_intent.created_at.isoformat(),
     }
 
     if idempotency_key:

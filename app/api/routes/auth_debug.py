@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,8 @@ from app.db.models.merchant import Merchant
 from app.schemas.merchant import MerchantCreateResponse, MerchantResponse
 from app.utils.api_key import generate_api_key
 from app.utils.hashing import hash_api_key
+from app.db.models.charge import Charge
+from app.schemas.charge import ChargeResponse
 
 router = APIRouter()
 
@@ -66,3 +68,23 @@ def debug_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_schem
 
     token = get_bearer_token(credentials)
     return {"token": token}
+
+
+@router.get("/test-charges", response_model=List[ChargeResponse])
+def list_test_charges(db: Session = Depends(get_db)):
+    charges = (
+        db.query(Charge)
+        .order_by(Charge.id.desc())
+        .all()
+    )
+    return charges
+
+
+@router.get("/test-charges/{charge_id}", response_model=ChargeResponse)
+def get_test_charge(charge_id: int, db: Session = Depends(get_db)):
+    charge = db.query(Charge).filter(Charge.id == charge_id).first()
+
+    if charge is None:
+        raise HTTPException(status_code=404, detail="Charge not found.")
+
+    return charge
