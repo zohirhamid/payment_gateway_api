@@ -1,7 +1,7 @@
 from typing import List
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_merchant, get_db, get_idempotency_key
@@ -15,7 +15,7 @@ from app.db.models.charge import Charge
 from app.schemas.payment_intent import PaymentIntentConfirmResponse
 
 from app.services.payment_service import build_webhook_payload, simulate_payment_result
-from app.services.webhook_service import create_webhook_event, deliver_webhook_event
+from app.services.webhook_service import create_webhook_event, deliver_webhook_event_task
 
 from app.services.idempotency_service import (
     create_idempotency_record,
@@ -78,7 +78,7 @@ def create_payment_intent(
         "amount": payment_intent.amount,
         "currency": payment_intent.currency,
         "status": payment_intent.status,
-        "created_at": payment_intent.created_at.isoformat(),
+        "created_at": payment_intent.created_at.isoformat(), # type: ignore
     }
 
     if idempotency_key:
@@ -155,25 +155,23 @@ def get_payment_intents(
 @router.post("/{payment_intent_id}/confirm", response_model=PaymentIntentConfirmResponse)
 def confirm_payment_intent(
     payment_intent_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant),
     idempotency_key: str | None = Depends(get_idempotency_key),
 ):
     """
-    Confirm a PaymentIntent for the authenticated merchant.
+    Confirm a payment intent and simulate a payment attempt.
 
-    This endpoint optionally replays a previously stored response when the same
-    idempotency key is reused with the same request payload. Otherwise, it:
-
-    - validates that the PaymentIntent exists and belongs to the current merchant
-    - checks that the PaymentIntent is still in a confirmable state
-    - creates a pending Charge for the payment attempt
-    - simulates the payment outcome
-    - updates the Charge and PaymentIntent to their final statuses
-    - creates a webhook event for the payment result
-
-    A PaymentIntent can only be confirmed once for now. After confirmation,
-    it moves to a terminal state such as `succeeded` or `failed`.
+    Flow:
+    - Optionally replay a previous response if the same idempotency key was used
+    - Ensure the payment intent exists and belongs to the merchant
+    - Ensure it is in a confirmable state
+    - Create a charge
+    - Simulate payment success/failure
+    - Update both charge and payment intent
+    - Create a webhook event
+    - Schedule webhook delivery in the background
     """
 
     # Created a hashed payload
@@ -250,7 +248,7 @@ def confirm_payment_intent(
     db.refresh(payment_intent)
 
 
-    # creates a webhook event for the payment result
+    # Creates a webhook event (for the payment result)
     event_type = (
         "payment.succeeded"
         if payment_intent.status == "succeeded"
@@ -267,19 +265,10 @@ def confirm_payment_intent(
         payload=webhook_payload,
     )
 
-    # Rebuild the payload with the real event id after persistence.
-    webhook_event.payload = json.dumps(
-        build_webhook_payload(payment_intent=payment_intent, event_id=webhook_event.id)
+    background_tasks.add_task(
+        deliver_webhook_event_task,
+        webhook_event.id,
     )
-    db.commit()
-    db.refresh(webhook_event)
-
-    if current_merchant.webhook_url:
-        deliver_webhook_event(
-            db=db,
-            webhook_event=webhook_event,
-            webhook_url=current_merchant.webhook_url
-        )
 
     response_payload = {
         "payment_intent_id": payment_intent.id,
