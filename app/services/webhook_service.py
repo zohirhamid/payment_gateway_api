@@ -41,13 +41,11 @@ def create_webhook_event(
 
     return webhook_event
 
-
 def can_retry_webhook_event(webhook_event: WebhookEvent) -> bool:
     return (
         webhook_event.delivery_status == "failed"
         and webhook_event.retry_count < MAX_WEBHOOK_RETRIES
     )
-
 
 def deliver_webhook_event(
         db: Session,
