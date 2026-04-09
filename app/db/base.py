@@ -10,4 +10,3 @@ import app.db.models.payment_intent # noqa
 import app.db.models.charge #noqa
 import app.db.models.idempotency_record #noqa
 import app.db.models.webhook_event #noqa
-import app.db.models.rate_limit_log #noqa

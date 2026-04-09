@@ -16,8 +16,6 @@ from app.schemas.payment_intent import PaymentIntentConfirmResponse
 
 from app.services.payment_service import build_webhook_payload, simulate_payment_result
 from app.services.webhook_service import create_webhook_event, deliver_webhook_event_task
-from app.core.config import settings
-from app.services.rate_limit_service import enforce_rate_limit
 from app.services.idempotency_service import (
     create_idempotency_record,
     get_idempotency_record,
@@ -44,8 +42,6 @@ def create_payment_intent(
     # idempotency
     request_hash = hash_request_payload(payload.model_dump())
 
-    should_enforce_rate_limit = True
-
     if idempotency_key:
         existing_record = get_idempotency_record(
             db=db,
@@ -60,18 +56,8 @@ def create_payment_intent(
                     status_code=409,
                     detail="Idempotency key was already used with a different payload.",
                 )
-            should_enforce_rate_limit = False
             # return existing response
             return PaymentIntentResponse(**json.loads(existing_record.response_body))
-
-    if should_enforce_rate_limit:
-        enforce_rate_limit(
-            db=db,
-            merchant_id=current_merchant.id,
-            endpoint="create_payment_intent",
-            max_requests=settings.rate_limit_create_payment_intent_max_requests,
-            window_seconds=settings.rate_limit_create_payment_intent_window_seconds,
-        )
 
 
     # First time?
@@ -195,8 +181,6 @@ def confirm_payment_intent(
     request_hash = hash_request_payload(confirm_payload)
 
     # 
-    should_enforce_rate_limit = True
-
     if idempotency_key:
         existing_record = get_idempotency_record(
             db=db,
@@ -211,20 +195,9 @@ def confirm_payment_intent(
                     status_code=409,
                     detail="Idempotency key was already used with a different payload.",
                 )
-            should_enforce_rate_limit = False
             return PaymentIntentConfirmResponse(**json.loads(existing_record.response_body))
         
-
-    if should_enforce_rate_limit:
-        enforce_rate_limit(
-            db=db,
-            merchant_id=current_merchant.id,
-            endpoint="create_payment_intent",
-            max_requests=settings.rate_limit_create_payment_intent_max_requests,
-            window_seconds=settings.rate_limit_create_payment_intent_window_seconds,
-        )
     
-
     payment_intent = ( # get the current payment intent and check if it belongs to the current merchant
         db.query(PaymentIntent)
         .filter(

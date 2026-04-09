@@ -69,7 +69,6 @@ app/
   core/
     config.py        # App configuration
     logging.py       # Logging setup
-    rate_limit.py    # Rate limiting
     security.py      # Security utilities
   db/
     base.py          # SQLAlchemy base
@@ -215,7 +214,6 @@ curl -X POST http://127.0.0.1:8000/payment_intents/ \
 
 - Advanced webhook retry strategies (exponential backoff)
 - Celery integration for more robust background jobs
-- Rate limiting
 - Enhanced logging and monitoring
 - Multi-currency support
 - Fraud detection
