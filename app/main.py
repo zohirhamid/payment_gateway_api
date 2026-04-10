@@ -1,4 +1,4 @@
-"""FastAPI application entrypoint.
+""" FastAPI application entrypoint.
 
 What this module does:
 - Creates the FastAPI app with metadata from settings.
@@ -9,27 +9,30 @@ Returns:
     The `app` object, imported by the ASGI server.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.routes.auth_debug import router as auth_debug_router
 from app.api.routes.merchants import router as merchants_router
 from app.api.routes.payment_intents import router as payment_intents_router
 from app.api.routes.webhooks import router as webhooks_router
+
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
 
 
-app = FastAPI(
-    title=settings.app_name,
-    description=settings.app_description,
-    version=settings.app_version,
-)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
 
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
     version=settings.app_version,
+    lifespan=lifespan,
 )
 
 # Add security scheme for Swagger UI authorize button.
@@ -43,11 +46,6 @@ app.openapi_components = {  # type: ignore
         }
     }
 }
-
-# Create all tables for all registered models if they do not already exist.
-@app.on_event("startup")
-def create_tables():
-    Base.metadata.create_all(bind=engine)
 
 app.include_router(auth_debug_router)
 app.include_router(merchants_router)

@@ -21,10 +21,15 @@ from app.services.idempotency_service import (
     get_idempotency_record,
 )
 
+from app.api.deps import (
+    create_payment_intent_rate_limit,
+    confirm_payment_rate_limit,
+)
+
 router = APIRouter(prefix="/payment_intents", tags=["payment_intents"])
 
 
-@router.post("/", response_model=PaymentIntentResponse)
+@router.post("/", dependencies=[Depends(create_payment_intent_rate_limit)], response_model=PaymentIntentResponse)
 def create_payment_intent(
     payload: PaymentIntentCreate,
     response: Response,
@@ -98,21 +103,7 @@ def create_payment_intent(
 def get_payment_intent(
     payment_intent_id: int,
     db: Session = Depends(get_db),
-    current_merchant: Merchant = Depends(get_current_merchant),
-):
-    """Fetch a single PaymentIntent belonging to the authenticated merchant.
-
-    Takes:
-        payment_intent_id: Path parameter for the PaymentIntent id.
-        db: SQLAlchemy session injected by `Depends(get_db)`.
-        current_merchant: Authenticated merchant injected by `get_current_merchant`.
-
-    Returns:
-        The requested PaymentIntent if it exists and belongs to the merchant.
-
-    Raises:
-        HTTPException: 404 if the PaymentIntent does not exist (or is not accessible).
-    """
+    current_merchant: Merchant = Depends(get_current_merchant)):
 
     payment_intent = (
         db.query(PaymentIntent)
@@ -131,17 +122,7 @@ def get_payment_intent(
 @router.get("/", response_model=List[PaymentIntentResponse])
 def get_payment_intents(
     db: Session = Depends(get_db),
-    current_merchant: Merchant = Depends(get_current_merchant),
-):
-    """List PaymentIntents for the authenticated merchant.
-
-    Takes:
-        db: SQLAlchemy session injected by `Depends(get_db)`.
-        current_merchant: Authenticated merchant injected by `get_current_merchant`.
-
-    Returns:
-        A list of PaymentIntents, newest first.
-    """
+    current_merchant: Merchant = Depends(get_current_merchant),):
 
     payment_intents = (
         db.query(PaymentIntent)
@@ -152,7 +133,7 @@ def get_payment_intents(
 
     return payment_intents
 
-@router.post("/{payment_intent_id}/confirm", response_model=PaymentIntentConfirmResponse)
+@router.post("/{payment_intent_id}/confirm", dependencies=[Depends(confirm_payment_rate_limit)], response_model=PaymentIntentConfirmResponse)
 def confirm_payment_intent(
     payment_intent_id: int,
     background_tasks: BackgroundTasks,
@@ -288,3 +269,4 @@ def confirm_payment_intent(
         )
 
     return response_payload
+
