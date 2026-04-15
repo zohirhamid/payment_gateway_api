@@ -15,20 +15,21 @@ from app.schemas.payment_intent import (PaymentIntentAttachPaymentMethod,
                                         PaymentIntentConfirmResponse,
                                         PaymentIntentCreate,
                                         PaymentIntentResponse)
-from app.services.payment_intent_service import \
-    attach_payment_method as attach_payment_method_service
-from app.services.payment_intent_service import \
-    cancel_payment_intent as cancel_payment_intent_service
-from app.services.payment_intent_service import \
-    capture_payment_intent as capture_payment_intent_service
-from app.services.payment_intent_service import \
-    confirm_payment_intent as confirm_payment_intent_service
-from app.services.payment_intent_service import \
-    create_payment_intent as create_payment_intent_service
-from app.services.payment_intent_service import \
-    get_payment_intent as get_payment_intent_service
-from app.services.payment_intent_service import \
-    list_payment_intents as list_payment_intents_service
+from app.services.payment_intents.command_service import (
+    attach_payment_method as attach_payment_method_service,
+    cancel_payment_intent as cancel_payment_intent_service,
+    create_payment_intent as create_payment_intent_service,
+)
+from app.services.payment_intents.orchestrator import (
+    capture_payment_intent as capture_payment_intent_service,
+    confirm_payment_intent as confirm_payment_intent_service,
+)
+from app.services.payment_intents.query_service import (
+    get_payment_intent as get_payment_intent_service,
+    list_payment_intents as list_payment_intents_service,
+)
+
+
 from app.services.webhook_service import deliver_webhook_event_task
 
 router = APIRouter(prefix="/payment_intents", tags=["payment_intents"])
@@ -72,6 +73,7 @@ def get_payment_intents(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_merchant: Merchant = Depends(get_current_merchant),):
+    
     return list_payment_intents_service(
         db=db,
         merchant_id=current_merchant.id,
