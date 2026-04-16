@@ -1,10 +1,10 @@
 import json
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.enums import PaymentIntentStatus
-from app.db.models.payment_intent import PaymentIntent
+from app.core.exceptions import PaymentIntentStateError
+from app.db.repositories.payment_intent_repository import create_intent
 from app.schemas.payment_intent import PaymentIntentCreate
 from app.services.idempotency_service import check_idempotency, create_idempotency_record
 from app.services.payment_intents.query_service import get_payment_intent
@@ -37,7 +37,8 @@ def create_payment_intent(
     if existing_response is not None:
         return existing_response
 
-    payment_intent = PaymentIntent(
+    payment_intent = create_intent(
+        db=db,
         merchant_id=merchant_id,
         amount=payload.amount,
         currency=payload.currency.upper(),
@@ -63,6 +64,7 @@ def create_payment_intent(
 
     return response_payload
 
+
 def attach_payment_method(
     *,
     db: Session,
@@ -77,9 +79,8 @@ def attach_payment_method(
     )
 
     if payment_intent.status != PaymentIntentStatus.REQUIRES_PAYMENT_METHOD:
-        raise HTTPException(
-            status_code=409,
-            detail="Payment method cannot be attached in the current state.",
+        raise PaymentIntentStateError(
+            "Payment method cannot be attached in the current state."
         )
 
     payment_intent.payment_method_reference = payment_method_reference
@@ -129,9 +130,8 @@ def cancel_payment_intent(
         PaymentIntentStatus.REQUIRES_PAYMENT_METHOD,
         PaymentIntentStatus.REQUIRES_CONFIRMATION,
     }:
-        raise HTTPException(
-            status_code=409,
-            detail="Payment intent cannot be canceled in its current state.",
+        raise PaymentIntentStateError(
+            "Payment intent cannot be canceled in its current state."
         )
 
     payment_intent = apply_payment_intent_status_transition(

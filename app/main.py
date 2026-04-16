@@ -22,6 +22,7 @@ from app.api.routes.refunds import router as refunds_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
+from app.api.error_handlers import register_error_handlers
 
 
 @asynccontextmanager
@@ -35,6 +36,8 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+register_error_handlers(app)
 
 # Add security scheme for Swagger UI authorize button.
 # This enables an "Authorize" modal that sends `Authorization: Bearer <token>`.

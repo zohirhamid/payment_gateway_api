@@ -1,10 +1,14 @@
 import json
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.enums import ChargeStatus, PaymentIntentStatus
-from app.db.models.charge import Charge
+from app.core.exceptions import (
+    ChargeNotFoundError,
+    ChargeStateError,
+    PaymentIntentStateError,
+)
+from app.db.repositories.charge_repository import get_by_payment_intent_for_merchant
 from app.services.charge_service import create_and_process_charge
 from app.services.idempotency_service import (
     check_idempotency,
@@ -59,9 +63,8 @@ def confirm_payment_intent(
         PaymentIntentStatus.REQUIRES_PAYMENT_METHOD,
         PaymentIntentStatus.REQUIRES_CONFIRMATION,
     }:
-        raise HTTPException(
-            status_code=409,
-            detail="Payment intent has already been processed or is not confirmable.",
+        raise PaymentIntentStateError(
+            "Payment intent has already been processed or is not confirmable."
         )
 
     if payment_intent.status == PaymentIntentStatus.REQUIRES_PAYMENT_METHOD:
@@ -173,28 +176,21 @@ def capture_payment_intent(
     )
 
     if payment_intent.status != PaymentIntentStatus.REQUIRES_CAPTURE:
-        raise HTTPException(
-            status_code=409,
-            detail="Payment intent cannot be captured in its current state.",
+        raise PaymentIntentStateError(
+            "Payment intent cannot be captured in its current state."
         )
 
-    charge = (
-        db.query(Charge)
-        .filter(
-            Charge.payment_intent_id == payment_intent_id,
-            Charge.merchant_id == merchant_id,
-        )
-        .first()
+    charge = get_by_payment_intent_for_merchant(
+        db=db,
+        payment_intent_id=payment_intent_id,
+        merchant_id=merchant_id,
     )
 
     if charge is None:
-        raise HTTPException(status_code=404, detail="Charge not found.")
+        raise ChargeNotFoundError("Charge not found.")
 
     if charge.status != ChargeStatus.AUTHORIZED:
-        raise HTTPException(
-            status_code=409,
-            detail="Charge is not in a capturable state.",
-        )
+        raise ChargeStateError("Charge is not in a capturable state.")
 
     charge.status = ChargeStatus.CAPTURED
     db.add(charge)

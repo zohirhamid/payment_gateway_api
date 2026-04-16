@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.enums import ChargeStatus, RefundReason, RefundStatus
+from app.core.exceptions import ChargeNotFoundError, ChargeStateError, RefundNotFoundError
 from app.db.models.charge import Charge
 from app.db.models.refund import Refund
 
@@ -45,20 +45,14 @@ def validate_refund_request(
     )
 
     if charge is None:
-        raise HTTPException(status_code=404, detail="Charge not found.")
+        raise ChargeNotFoundError("Charge not found.")
 
     if charge.status != ChargeStatus.CAPTURED:
-        raise HTTPException(
-            status_code=409,
-            detail="Charge is not refundable in its current state.",
-        )
+        raise ChargeStateError("Charge is not refundable in its current state.")
 
     refundable_amount = calculate_refundable_amount(charge)
     if refundable_amount <= 0:
-        raise HTTPException(
-            status_code=409,
-            detail="Charge has already been fully refunded.",
-        )
+        raise ChargeStateError("Charge has already been fully refunded.")
 
     return charge, refundable_amount
 
@@ -150,7 +144,7 @@ def get_refund(db: Session, merchant_id: int, refund_id: int) -> Refund:
         .first()
     )
     if refund is None:
-        raise HTTPException(status_code=404, detail="Refund not found.")
+        raise RefundNotFoundError("Refund not found.")
     return refund
 
 

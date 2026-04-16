@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.enums import PaymentIntentStatus
+from app.core.exceptions import PaymentIntentNotFoundError
 from app.db.models.payment_intent import PaymentIntent
-
+from app.db.repositories.payment_intent_repository import list_for_merchant, get_by_id_for_merchant
 
 def get_payment_intent(
     *,
@@ -16,17 +16,14 @@ def get_payment_intent(
     """
     Fetch a single payment intent scoped to a merchant.
     """
-    payment_intent = (
-        db.query(PaymentIntent)
-        .filter(
-            PaymentIntent.id == payment_intent_id,
-            PaymentIntent.merchant_id == merchant_id,
-        )
-        .first()
+    payment_intent = get_by_id_for_merchant(
+        db=db,
+        payment_intent_id=payment_intent_id,
+        merchant_id=merchant_id
     )
 
     if payment_intent is None:
-        raise HTTPException(status_code=404, detail="Payment intent not found.")
+        raise PaymentIntentNotFoundError("Payment intent not found.")
 
     return payment_intent
 
@@ -44,50 +41,19 @@ def list_payment_intents(
     limit: int = 100,
     offset: int = 0,
 ) -> list[PaymentIntent]:
-    """
-    List payment intents scoped to a merchant.
 
-    Inputs:
-        db: SQLAlchemy session.
-        merchant_id: Authenticated merchant id (ownership scope).
-        status: Optional filter by PaymentIntent status.
-        currency: Optional filter by 3-letter currency (case-insensitive).
-        amount_gte: Optional minimum amount (inclusive).
-        amount_lte: Optional maximum amount (inclusive).
-        created_at_gte: Optional earliest created_at (inclusive).
-        created_at_lte: Optional latest created_at (inclusive).
-        limit: Max rows to return.
-        offset: Rows to skip (pagination).
-
-    Output:
-        List of PaymentIntent model instances, newest-first.
-    """
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
 
-    query = db.query(PaymentIntent).filter(PaymentIntent.merchant_id == merchant_id)
-
-    if status is not None:
-        query = query.filter(PaymentIntent.status == status)
-
-    if currency:
-        query = query.filter(PaymentIntent.currency == currency.upper())
-
-    if amount_gte is not None:
-        query = query.filter(PaymentIntent.amount >= amount_gte)
-
-    if amount_lte is not None:
-        query = query.filter(PaymentIntent.amount <= amount_lte)
-
-    if created_at_gte is not None:
-        query = query.filter(PaymentIntent.created_at >= created_at_gte)
-
-    if created_at_lte is not None:
-        query = query.filter(PaymentIntent.created_at <= created_at_lte)
-
-    return (
-        query.order_by(PaymentIntent.id.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
+    return list_for_merchant(
+        db=db,
+        merchant_id=merchant_id,
+        status=status,
+        currency=currency,
+        amount_gte=amount_gte,
+        amount_lte=amount_lte,
+        created_at_gte=created_at_gte,
+        created_at_lte=created_at_lte,
+        limit=limit,
+        offset=offset,
     )

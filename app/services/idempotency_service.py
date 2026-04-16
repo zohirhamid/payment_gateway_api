@@ -1,8 +1,8 @@
 import json
 
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import IdempotencyConflictError
 from app.db.models.idempotency_record import IdempotencyRecord
 
 
@@ -36,7 +36,7 @@ def check_idempotency(
     """
     Return a stored response body for a matching idempotency request.
 
-    If the key exists with a different payload hash, raise HTTPException(409).
+    If the key exists with a different payload hash, raise IdempotencyConflictError.
     """
     if not idempotency_key:
         return None
@@ -52,9 +52,8 @@ def check_idempotency(
         return None
 
     if existing_record.request_hash != request_hash:
-        raise HTTPException(
-            status_code=409,
-            detail="Idempotency key was already used with a different payload.",
+        raise IdempotencyConflictError(
+            "Idempotency key was already used with a different payload."
         )
 
     return json.loads(existing_record.response_body)
